@@ -18,8 +18,8 @@ class ActivityTracker {
             
             const changes = {
                 functions: this.detectFunctionChanges(previousContent, currentContent),
-                classes: this.detectClassChanges(previousContent, currentContent),
-                imports: this.detectImportChanges(previousContent, currentContent),
+                classes: { added: [], modified: [], removed: [] },  // Initialize with empty arrays
+                imports: { added: [], modified: [], removed: [] },  // Initialize with empty arrays
                 lineChanges: this.getLineChanges(previousContent, currentContent)
             };
 
@@ -109,26 +109,15 @@ class ActivityTracker {
     }
 
     detectFunctionChanges(oldContent, newContent) {
+        // Simple regex-based function detection
+        const functionRegex = /function\s+(\w+)\s*\(/g;
+        const oldFunctions = [...oldContent.matchAll(functionRegex)].map(m => m[1]);
+        const newFunctions = [...newContent.matchAll(functionRegex)].map(m => m[1]);
+        
         return {
-            added: [],
-            modified: [],
-            removed: []
-        };
-    }
-
-    detectClassChanges(oldContent, newContent) {
-        return {
-            added: [],
-            modified: [],
-            removed: []
-        };
-    }
-
-    detectImportChanges(oldContent, newContent) {
-        return {
-            added: [],
-            modified: [],
-            removed: []
+            added: newFunctions.filter(f => !oldFunctions.includes(f)),
+            modified: [], // Would need more complex parsing to detect modifications
+            removed: oldFunctions.filter(f => !newFunctions.includes(f))
         };
     }
 

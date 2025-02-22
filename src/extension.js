@@ -68,15 +68,15 @@ async function activate(context) {
         }
     });
 }
-async function initializeTracking() {
-    try {
-        await gitManager.ensureActivityTrackerRepo();
-        await gitManager.ensureProfileReadme();
-        scheduler.startPeriodicTracking();
-    } catch (error) {
-        vscode.window.showErrorMessage(`Initialization failed: ${error.message}`);
-    }
-}
+// async function initializeTracking() {
+//     try {
+//         await gitManager.ensureActivityTrackerRepo();
+//         await gitManager.ensureProfileReadme();
+//         scheduler.startPeriodicTracking();
+//     } catch (error) {
+//         vscode.window.showErrorMessage(`Initialization failed: ${error.message}`);
+//     }
+// }
 
 function deactivate() {
     if (scheduler) {

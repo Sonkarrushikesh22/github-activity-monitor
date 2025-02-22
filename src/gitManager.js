@@ -309,7 +309,6 @@ _Last updated: ${new Date().toUTCString()}_
         }
     }
 
-
     async initializeRepoStructure() {
         try {
             console.log('Initializing repository structure...');
@@ -385,9 +384,12 @@ _Last updated: ${new Date().toUTCString()}_
         
         this.isProcessingQueue = true;
         try {
+            // Batch update approach - collect all updates first
+            const updates = [];
+            
             for (const [project, activities] of this.activityQueue.entries()) {
                 if (activities.length === 0) continue;
-
+                
                 const logFile = `projects/${project}/activity-log.json`;
                 let logs = [];
                 
@@ -402,17 +404,27 @@ _Last updated: ${new Date().toUTCString()}_
                 } catch (error) {
                     console.log('No existing log file found, creating new one');
                 }
-
+                
                 logs.push(...activities);
-
+                
+                updates.push({
+                    file: logFile,
+                    content: JSON.stringify(logs, null, 2),
+                    message: `Update activity log with ${activities.length} entries`
+                });
+                
+                this.activityQueue.set(project, []);
+            }
+            
+            // Execute updates with delay between them to avoid rate limiting
+            for (const update of updates) {
                 await this.githubApi.updateFile(
                     this.REPO_NAME,
-                    logFile,
-                    JSON.stringify(logs, null, 2),
-                    `Update activity log with ${activities.length} entries`
+                    update.file,
+                    update.content,
+                    update.message
                 );
-
-                this.activityQueue.set(project, []);
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         } catch (error) {
             console.error('Error processing activity queue:', error);
@@ -468,7 +480,6 @@ jobs:
           git push`;
     }
 
-  
 getInitialReadme () {
   return `# Code Activity Tracker
 
@@ -484,182 +495,182 @@ Automatically tracks and visualizes your coding activity across different projec
 Activity tracking will begin shortly after repository initialization.`;
 };
 
-getVisualizationScript () {
-  return `
-const fs = require('fs');
-const path = require('path');
+// getVisualizationScript () {
 
-// Helper function to ensure directory exists
-function ensureDirectoryExists(dirPath) {
-    if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
-        console.log(\`Created directory: \${dirPath}\`);
-    }
-}
+//   return `
+// const fs = require('fs');
+// const path = require('path');
 
-// Helper function to create SVG elements as strings
-function SVGBuilder(width, height) {
-    this.width = width;
-    this.height = height;
-    this.elements = [];
-}
+// // Helper function to ensure directory exists
+// function ensureDirectoryExists(dirPath) {
+//     if (!fs.existsSync(dirPath)) {
+//         fs.mkdirSync(dirPath, { recursive: true });
+//         console.log(\`Created directory: \${dirPath}\`);
+//     }
+// }
 
-SVGBuilder.prototype.addRect = function(x, y, width, height, fill, radius = 0) {
-    this.elements.push('<rect x="' + x + '" y="' + y + '" width="' + width + '" height="' + height + '" fill="' + fill + '" rx="' + radius + '" ry="' + radius + '" />');
-    return this;
-};
+// // Helper function to create SVG elements as strings
+// function SVGBuilder(width, height) {
+//     this.width = width;
+//     this.height = height;
+//     this.elements = [];
+// }
 
-SVGBuilder.prototype.addText = function(x, y, text, options = {}) {
-    const fontSize = options.fontSize || '12';
-    const anchor = options.anchor || 'middle';
-    this.elements.push('<text x="' + x + '" y="' + y + '" font-size="' + fontSize + '" text-anchor="' + anchor + '">' + text + '</text>');
-    return this;
-};
+// SVGBuilder.prototype.addRect = function(x, y, width, height, fill, radius = 0) {
+//     this.elements.push('<rect x="' + x + '" y="' + y + '" width="' + width + '" height="' + height + '" fill="' + fill + '" rx="' + radius + '" ry="' + radius + '" />');
+//     return this;
+// };
 
-SVGBuilder.prototype.toString = function() {
-    return '<?xml version="1.0" encoding="UTF-8"?>\\n' +
-           '<svg xmlns="http://www.w3.org/2000/svg" width="' + this.width + '" height="' + this.height + '" viewBox="0 0 ' + this.width + ' ' + this.height + '">\\n' +
-           '    ' + this.elements.join('\\n    ') + '\\n' +
-           '</svg>';
-};
+// SVGBuilder.prototype.addText = function(x, y, text, options = {}) {
+//     const fontSize = options.fontSize || '12';
+//     const anchor = options.anchor || 'middle';
+//     this.elements.push('<text x="' + x + '" y="' + y + '" font-size="' + fontSize + '" text-anchor="' + anchor + '">' + text + '</text>');
+//     return this;
+// };
 
-// Convert intensity to a heatmap color
-function getHeatmapColor(intensity) {
-    const normalizedIntensity = Math.max(0, Math.min(1, intensity));
-    const greenValue = Math.floor(normalizedIntensity * 155);
-    const blueValue = Math.floor(normalizedIntensity * 255);
-    return 'rgb(0,' + greenValue + ',' + blueValue + ')';
-}
+// SVGBuilder.prototype.toString = function() {
+//     return '<?xml version="1.0" encoding="UTF-8"?>\\n' +
+//            '<svg xmlns="http://www.w3.org/2000/svg" width="' + this.width + '" height="' + this.height + '" viewBox="0 0 ' + this.width + ' ' + this.height + '">\\n' +
+//            '    ' + this.elements.join('\\n    ') + '\\n' +
+//            '</svg>';
+// };
 
-// Generate Heatmap SVG
-function generateHeatmap(activity) {
-    const svg = new SVGBuilder(800, 200);
+// // Convert intensity to a heatmap color
+// function getHeatmapColor(intensity) {
+//     const normalizedIntensity = Math.max(0, Math.min(1, intensity));
+//     const greenValue = Math.floor(normalizedIntensity * 155);
+//     const blueValue = Math.floor(normalizedIntensity * 255);
+//     return 'rgb(0,' + greenValue + ',' + blueValue + ')';
+// }
 
-    // Process activity data for heatmap
-    const activityByDate = new Map();
-    activity.forEach(entry => {
-        const date = new Date(entry.timestamp).toISOString().split('T')[0];
-        activityByDate.set(date, (activityByDate.get(date) || 0) + 1);
-    });
+// // Generate Heatmap SVG
+// function generateHeatmap(activity) {
+//     const svg = new SVGBuilder(800, 200);
 
-    // Create heatmap cells
-    const cellSize = 10;
-    const cellPadding = 2;
-    const maxActivity = Math.max(...activityByDate.values(), 1);
+//     // Process activity data for heatmap
+//     const activityByDate = new Map();
+//     activity.forEach(entry => {
+//         const date = new Date(entry.timestamp).toISOString().split('T')[0];
+//         activityByDate.set(date, (activityByDate.get(date) || 0) + 1);
+//     });
 
-    Array.from(activityByDate.entries()).forEach(([date, count], i) => {
-        const x = (i % 52) * (cellSize + cellPadding) + 20;
-        const y = Math.floor(i / 52) * (cellSize + cellPadding) + 20;
-        const intensity = count / maxActivity;
-        const fillColor = getHeatmapColor(intensity);
+//     // Create heatmap cells
+//     const cellSize = 10;
+//     const cellPadding = 2;
+//     const maxActivity = Math.max(...activityByDate.values(), 1);
 
-        svg.addRect(x, y, cellSize, cellSize, fillColor, 2);
-    });
+//     Array.from(activityByDate.entries()).forEach(([date, count], i) => {
+//         const x = (i % 52) * (cellSize + cellPadding) + 20;
+//         const y = Math.floor(i / 52) * (cellSize + cellPadding) + 20;
+//         const intensity = count / maxActivity;
+//         const fillColor = getHeatmapColor(intensity);
 
-    return svg.toString();
-}
+//         svg.addRect(x, y, cellSize, cellSize, fillColor, 2);
+//     });
 
-// Generate Activity Chart SVG
-function generateActivityChart(activity) {
-    const svg = new SVGBuilder(800, 300);
+//     return svg.toString();
+// }
 
-    // Process activity data by project
-    const projectActivity = new Map();
-    activity.forEach(entry => {
-        projectActivity.set(entry.project, (projectActivity.get(entry.project) || 0) + 1);
-    });
+// // Generate Activity Chart SVG
+// function generateActivityChart(activity) {
+//     const svg = new SVGBuilder(800, 300);
 
-    // Create bar chart
-    const barWidth = 40;
-    const barGap = 20;
-    const maxActivity = Math.max(...projectActivity.values(), 1);
+//     // Process activity data by project
+//     const projectActivity = new Map();
+//     activity.forEach(entry => {
+//         projectActivity.set(entry.project, (projectActivity.get(entry.project) || 0) + 1);
+//     });
 
-    Array.from(projectActivity.entries()).forEach(([project, count], i) => {
-        const height = (count / maxActivity) * 200;
-        const x = i * (barWidth + barGap) + 50;
-        const y = 250 - height;
+//     // Create bar chart
+//     const barWidth = 40;
+//     const barGap = 20;
+//     const maxActivity = Math.max(...projectActivity.values(), 1);
 
-        // Add bar
-        svg.addRect(x, y, barWidth, height, '#4A90E2', 4);
+//     Array.from(projectActivity.entries()).forEach(([project, count], i) => {
+//         const height = (count / maxActivity) * 200;
+//         const x = i * (barWidth + barGap) + 50;
+//         const y = 250 - height;
 
-        // Add label
-        svg.addText(x + barWidth / 2, 260, project, { fontSize: '12', anchor: 'middle' });
-    });
+//         // Add bar
+//         svg.addRect(x, y, barWidth, height, '#4A90E2', 4);
 
-    return svg.toString();
-}
+//         // Add label
+//         svg.addText(x + barWidth / 2, 260, project, { fontSize: '12', anchor: 'middle' });
+//     });
 
-// Generate visualizations
-function generateVisualizations(callback) {
-    try {
-        const projectsDir = path.join(process.cwd(), 'projects');
-        const visualizationsDir = path.join(process.cwd(), 'visualizations');
+//     return svg.toString();
+// }
 
-        // Ensure directories exist
-        ensureDirectoryExists(projectsDir);
-        ensureDirectoryExists(visualizationsDir);
+// // Generate visualizations
+// function generateVisualizations(callback) {
+//     try {
+//         const projectsDir = path.join(process.cwd(), 'projects');
+//         const visualizationsDir = path.join(process.cwd(), 'visualizations');
 
-        // Initialize with empty data if no projects exist
-        let allActivity = [];
+//         // Ensure directories exist
+//         ensureDirectoryExists(projectsDir);
+//         ensureDirectoryExists(visualizationsDir);
 
-        // Only try to read project logs if the directory has contents
-        const projectContents = fs.readdirSync(projectsDir);
-        const projects = projectContents
-            .filter(file => {
-                const fullPath = path.join(projectsDir, file);
-                return fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory();
-            });
+//         // Initialize with empty data if no projects exist
+//         let allActivity = [];
+
+//         // Only try to read project logs if the directory has contents
+//         const projectContents = fs.readdirSync(projectsDir);
+//         const projects = projectContents
+//             .filter(file => {
+//                 const fullPath = path.join(projectsDir, file);
+//                 return fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory();
+//             });
         
-        if (projects.length > 0) {
-            projects.forEach(project => {
-                const logPath = path.join(projectsDir, project, 'activity-log.json');
-                if (fs.existsSync(logPath)) {
-                    try {
-                        const logs = JSON.parse(fs.readFileSync(logPath, 'utf8'));
-                        allActivity = allActivity.concat(logs);
-                    } catch (err) {
-                        console.warn(\`Warning: Could not parse log file for project \${project}:\`, err);
-                    }
-                }
-            });
-        } else {
-            console.log('No project directories found. Generating empty visualizations.');
-        }
+//         if (projects.length > 0) {
+//             projects.forEach(project => {
+//                 const logPath = path.join(projectsDir, project, 'activity-log.json');
+//                 if (fs.existsSync(logPath)) {
+//                     try {
+//                         const logs = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+//                         allActivity = allActivity.concat(logs);
+//                     } catch (err) {
+//                         console.warn(\`Warning: Could not parse log file for project \${project}:\`, err);
+//                     }
+//                 }
+//             });
+//         } else {
+//             console.log('No project directories found. Generating empty visualizations.');
+//         }
 
-        // Generate Heatmap
-        const heatmapSvg = generateHeatmap(allActivity);
-        fs.writeFileSync(
-            path.join(visualizationsDir, 'heatmap.svg'),
-            heatmapSvg
-        );
+//         // Generate Heatmap
+//         const heatmapSvg = generateHeatmap(allActivity);
+//         fs.writeFileSync(
+//             path.join(visualizationsDir, 'heatmap.svg'),
+//             heatmapSvg
+//         );
 
-        // Generate Activity Chart
-        const chartSvg = generateActivityChart(allActivity);
-        fs.writeFileSync(
-            path.join(visualizationsDir, 'activity-chart.svg'),
-            chartSvg
-        );
+//         // Generate Activity Chart
+//         const chartSvg = generateActivityChart(allActivity);
+//         fs.writeFileSync(
+//             path.join(visualizationsDir, 'activity-chart.svg'),
+//             chartSvg
+//         );
 
-        console.log('Visualizations generated successfully');
-        if (callback) callback(null);
-    } catch (error) {
-        console.error('Error generating visualizations:', error);
-        if (callback) callback(error);
-        else throw error;
-    }
-}
+//         console.log('Visualizations generated successfully');
+//         if (callback) callback(null);
+//     } catch (error) {
+//         console.error('Error generating visualizations:', error);
+//         if (callback) callback(error);
+//         else throw error;
+//     }
+// }
 
-// Export for both CommonJS and direct execution
-if (require.main === module) {
-    generateVisualizations(function(err) {
-        if (err) process.exit(1);
-    });
-} else {
-    module.exports = { generateVisualizations };
-}
-`;
-};
-
+// // Export for both CommonJS and direct execution
+// if (require.main === module) {
+//     generateVisualizations(function(err) {
+//         if (err) process.exit(1);
+//     });
+// } else {
+//     module.exports = { generateVisualizations };
+// }
+// `;
+// };
 getProfileScript() {
     return `const fs = require('fs');
 const path = require('path');
